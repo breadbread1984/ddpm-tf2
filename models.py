@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+from enum import Enum;
+import numpy as np;
 import tensorflow as tf;
 import tensorflow_addons as tfa;
 
@@ -100,6 +102,36 @@ def Unet(input_shape, input_channels, output_channels, res_block_num, attn_resol
   results = tf.keras.layers.Lambda(lambda x: tf.keras.activations.swish(x))(results);
   results = tf.keras.layers.Conv2D(output_channels, kernel_size = (3,3), padding = 'same', kernel_initializer = tf.keras.initializers.VarianceScaling(scale = 1e-10, mode = 'fan_avg', distribution = 'uniform'), bias_initializer = tf.keras.initializers.Zeros())(results);
   return tf.keras.Model(inputs = (inputs, t), outputs = results);
+
+class BetaSchedule(Enum):
+  quad = 1
+  linear = 2
+  warmup10 = 3
+  warmup50 = 4
+  const = 5
+  jsd = 6
+
+def get_beta_schedule(scheduler: BetaSchedule, start, end, timesteps):
+  def _warmup_beta(start, end, timesteps, frac):
+    betas = end * np.ones(timesteps, dtype = np.float64)
+    warmup_time = int(timesteps * frac)
+    betas[:warmup_time] = np.linspace(start, end, warmup_time, dtype = np.float64)
+    return betas
+  if scheduler == BetaSchedule.quad:
+    betas = np.linspace(start ** 0.5, end ** 0.5, timesteps, dtype = np.float64) ** 2;
+  elif scheduler == BetaSchedule.linear:
+    betas = np.linspace(start, end, timesteps, dtype = np.float64);
+  elif scheduler == BetaSchedule.warmup10:
+    betas = _warmup_beta(start, end, timesteps, 0.1);
+  elif scheduler == BetaSchedule.warmup50:
+    betas = _warmup_beta(start, end, timesteps, 0.5);
+  elif scheduler == BetaSchedule.const:
+    betas = end * np.ones(timesteps, dtype = np.float64);
+  elif scheduler == BetaSchedule.jsd:
+    betas = 1. / np.linspace(timesteps, 1, timesteps, dtype = np.float64);
+  else:
+    raise NotImplementedError(scheduler)
+  return betas
 
 if __name__ == "__main__":
   import numpy as np
